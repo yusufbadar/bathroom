@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1c1a18">
+<title>Bathroom 3D Tour</title>
+<meta name="description" content="Walk through the bathroom remodel in 3D. Swap the flooring and compare before and after.">
+<link rel="stylesheet" href="css/site.css">
+<style>
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body { background: #1c1a18; color: var(--ink); }
+  #stage { position: fixed; top: 0; left: 0; right: 0; bottom: var(--sheet-h, 0px); touch-action: none; }
+  #stage canvas { display: block; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+  .dim { background: rgba(28,26,24,.82); color: #fff; font: 600 13px/1 var(--sans); padding: 6px 9px; border-radius: 999px; white-space: nowrap; }
+  .dim.small { font-size: 11.5px; background: rgba(255,255,255,.9); color: #1c1a18; }
+  .dim.area { background: var(--accent); color: #fff; font-size: 11.5px; }
+
+  .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 8px;
+    padding: calc(env(safe-area-inset-top) + 10px) 12px 10px; pointer-events: none; }
+  .topbar > * { pointer-events: auto; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border-radius: 999px; border: 0;
+    background: rgba(255,255,255,.92); color: #1c1a18; font: 600 14px var(--sans); text-decoration: none; box-shadow: 0 2px 12px rgba(0,0,0,.18);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); cursor: pointer; }
+  .seg { display: inline-flex; background: rgba(255,255,255,.92); border-radius: 999px; padding: 4px; box-shadow: 0 2px 12px rgba(0,0,0,.18); margin-left: auto; }
+  .seg button { height: 36px; min-width: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font: 600 13.5px var(--sans); color: #4a4540; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: #1c1a18; color: #fff; }
+
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: rgba(250,248,245,.95); color: #1c1a18;
+    border-radius: 18px 18px 0 0; box-shadow: 0 -6px 30px rgba(0,0,0,.22); padding: 10px 0 calc(env(safe-area-inset-bottom) + 6px);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); max-width: 760px; margin: 0 auto; }
+  .sheet-top { display: flex; gap: 8px; align-items: center; padding: 0 12px 8px; }
+  .sheet-top .ba { flex: 1; margin: 0; }
+  .morebtn { flex: 0 0 auto; height: 44px; padding: 0 14px; border-radius: 12px; border: 1.5px solid #ddd5cb; background: #fff; font: 600 14px var(--sans); color: #1c1a18; cursor: pointer; }
+  .morebtn .chev { display: inline-block; transition: transform .25s; }
+  .sheet-open .morebtn .chev { transform: rotate(180deg); }
+  .more { display: none; padding-top: 2px; }
+  .sheet-open .more { display: block; }
+  .row { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; padding: 0 12px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .row::-webkit-scrollbar { display: none; }
+  .rowlabel { font: 700 11px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: #8a8178; padding: 2px 16px 4px; }
+  .chip { flex: 0 0 auto; height: 44px; padding: 0 15px; border-radius: 999px; border: 1.5px solid #ddd5cb; background: #fff; font: 600 14px var(--sans); color: #1c1a18; cursor: pointer; white-space: nowrap; }
+  .chip[aria-pressed="true"] { background: #1c1a18; border-color: #1c1a18; color: #fff; }
+  .chip.play { border-color: var(--accent); color: var(--accent); }
+  .chip.play[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #ece6de; padding: 3px; border-radius: 13px; }
+  .ba button { height: 40px; border: 0; border-radius: 11px; background: transparent; font: 700 15px var(--sans); color: #5d554d; cursor: pointer; }
+  .ba button[aria-pressed="true"] { background: #fff; color: #1c1a18; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  .swatch { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 12px; border: 1.5px solid #ddd5cb; background: #fff; cursor: pointer; font: 600 13px/1.2 var(--sans); color: #1c1a18; min-height: 48px; text-align: left; }
+  .swatch img { width: 38px; height: 38px; border-radius: 9px; object-fit: cover; }
+  .swatch small { display: block; font-weight: 500; color: #8a8178; font-size: 11.5px; }
+  .swatch[aria-pressed="true"] { border-color: #1c1a18; box-shadow: inset 0 0 0 1.5px #1c1a18; }
+  .is-before .swatch, .is-before .style { opacity: .55; }
+  .style { flex: 0 0 auto; width: 92px; padding: 0; border-radius: 12px; border: 1.5px solid #ddd5cb; background: #fff; overflow: hidden; cursor: pointer; text-align: left; font: 600 12px/1.2 var(--sans); color: #1c1a18; }
+  .style img { width: 100%; height: 58px; object-fit: cover; display: block; }
+  .style span { display: block; padding: 5px 7px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .style[aria-pressed="true"] { border-color: #1c1a18; box-shadow: inset 0 0 0 1.5px #1c1a18; }
+  .ptbadge { position: fixed; z-index: 4; right: 12px; top: calc(env(safe-area-inset-top) + 66px); background: rgba(28,26,24,.78); color: #fff; font: 600 12px var(--sans); padding: 7px 10px 9px; border-radius: 10px; opacity: 0; transition: opacity .3s; pointer-events: none; min-width: 120px; }
+  .ptbadge.show { opacity: 1; }
+  .ptbadge i { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: linear-gradient(90deg, #e9b48f var(--p, 0%), rgba(255,255,255,.2) var(--p, 0%)); }
+  .spec { padding: 2px 14px 10px; font: 13px/1.45 var(--sans); color: #5d554d; }
+  .spec b { color: #1c1a18; display: block; font-size: 14px; margin-bottom: 2px; }
+  .is-doll .walk-only { display: none; }
+
+  #hint { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(.96); z-index: 4; background: rgba(28,26,24,.85); color: #fff; padding: 14px 18px; border-radius: 16px;
+    font: 600 14px/1.6 var(--sans); text-align: center; opacity: 0; pointer-events: none; transition: opacity .4s, transform .4s; }
+  #hint.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #loader { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: #1c1a18; color: #fff; transition: opacity .5s; font: 600 15px var(--sans); }
+  #loader.done { opacity: 0; pointer-events: none; }
+  #loader .bar { width: 180px; height: 4px; border-radius: 2px; background: #3a3632; margin-top: 14px; overflow: hidden; }
+  #loaderBar { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .badge { position: fixed; z-index: 4; left: 12px; top: calc(env(safe-area-inset-top) + 66px); background: #b5432f; color: #fff; font: 700 12px var(--sans); letter-spacing: .06em; padding: 6px 10px; border-radius: 8px; display: none; }
+  .is-before .badge { display: block; }
+  @media (min-width: 900px) {
+    .sheet { left: 16px; right: auto; bottom: 16px; width: 420px; border-radius: 20px; }
+    .row { flex-wrap: wrap; }
+    #stage { bottom: 0; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+  "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.8.3/build/index.module.js",
+  "three-gpu-pathtracer": "https://cdn.jsdelivr.net/npm/three-gpu-pathtracer@0.0.23/build/index.module.js"
+} }
+</script>
+</head>
+<body>
+<div id="loader"><div style="text-align:center">Building the bathroom…<div class="bar"><div id="loaderBar"></div></div></div></div>
+<div id="stage"></div>
+
+<header class="topbar">
+  <a class="pill" href="./" aria-label="Back to overview">‹ Home</a>
+  <div class="seg" role="group" aria-label="View mode">
+    <button data-mode="walk" aria-pressed="true">Walk</button>
+    <button data-mode="doll" aria-pressed="false">Dollhouse</button>
+  </div>
+</header>
+<div class="badge">BEFORE · CURRENT FLOOR</div>
+<div id="ptBadge" class="ptbadge" aria-live="polite"><span>Photo render</span><i></i></div>
+<div id="hint">☝️ Drag to look around<br>👆 Tap the floor to walk there<br>🤏 Pinch to zoom</div>
+
+<section class="sheet" aria-label="Tour controls">
+  <div class="sheet-top">
+    <div class="ba" role="group" aria-label="Before or after">
+      <button data-phase="before" aria-pressed="false">Before</button>
+      <button data-phase="after" aria-pressed="true">After</button>
+    </div>
+    <button id="moreBtn" class="morebtn" aria-expanded="false" aria-controls="more">More <span class="chev">⌃</span></button>
+  </div>
+  <div class="row" role="group" aria-label="Design style">
+    <button class="style" data-style="minimal" aria-pressed="true"><img src="media/thumbs/minimal.jpg" alt=""><span>Warm Minimal</span></button>
+    <button class="style" data-style="spa" aria-pressed="false"><img src="media/thumbs/spa.jpg" alt=""><span>Soft Spa</span></button>
+    <button class="style" data-style="japandi" aria-pressed="false"><img src="media/thumbs/japandi.jpg" alt=""><span>Japandi</span></button>
+    <button class="style" data-style="terrazzo" aria-pressed="false"><img src="media/thumbs/terrazzo.jpg" alt=""><span>Terrazzo &amp; Sage</span></button>
+  </div>
+  <div class="row" role="group" aria-label="Floor">
+    <button class="swatch" data-floor="greige" aria-pressed="true"><img src="textures/floor_greige.jpg" alt=""><span>Warm greige<small>24×48</small></span></button>
+    <button class="swatch" data-floor="ivory" aria-pressed="false"><img src="textures/floor_ivory.jpg" alt=""><span>Ivory limestone<small>24×24</small></span></button>
+    <button class="swatch" data-floor="herringbone" aria-pressed="false"><img src="textures/floor_herringbone.jpg" alt=""><span>Oak herringbone<small>6×36</small></span></button>
+    <button class="swatch" data-floor="terrazzo" aria-pressed="false"><img src="textures/floor_terrazzo.jpg" alt=""><span>Terrazzo<small>24×24</small></span></button>
+    <button class="swatch" data-floor="graphite" aria-pressed="false"><img src="textures/floor_graphite.jpg" alt=""><span>Graphite<small>32×32</small></span></button>
+  </div>
+  <div class="row walk-only" role="group" aria-label="Places">
+    <button class="chip play" id="autoBtn" aria-pressed="false">▶ Auto tour</button>
+    <button class="chip" data-spot="entry">Entry</button>
+    <button class="chip" data-spot="vanity">Vanity</button>
+    <button class="chip" data-spot="window">Window</button>
+    <button class="chip" data-spot="shower">Shower</button>
+    <button class="chip" data-spot="inside">In the shower</button>
+    <button class="chip" data-spot="toilet">Toilet nook</button>
+    <button class="chip" data-spot="door">Barn door</button>
+  </div>
+  <div id="more" class="more">
+    <div class="spec" aria-live="polite"><b id="specTitle"></b><span id="specText"></span></div>
+    <div class="row" role="group" aria-label="Details">
+      <button class="chip" data-finish="black" aria-pressed="true">Matte black</button>
+      <button class="chip" data-finish="nickel" aria-pressed="false">Polished nickel</button>
+      <button class="chip" data-finish="brass" aria-pressed="false">Brushed brass</button>
+      <button class="chip" data-finish="chrome" aria-pressed="false">Chrome</button>
+    </div>
+    <div class="row" role="group" aria-label="Rendering">
+      <button class="chip" id="ledBtn" aria-pressed="true">Vanity LED glow</button>
+      <button class="chip" id="photoBtn" aria-pressed="true">✨ Photo-quality when still</button>
+    </div>
+  </div>
+</section>
+
+<script type="module" src="js/tour.js"></script>
+</body>
+</html>
